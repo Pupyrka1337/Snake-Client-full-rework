@@ -1,168 +1,70 @@
--- SNAKE CLIENT ASCII Logo
-print([[
- SSSSS  N   N  AAAAA  K   K  EEEEE       CCCCC  L       III  EEEEE  N   N  TTTTT
- S      NN  N  A   A  K  K   E           C      L        I   E      NN  N    T
- SSSSS  N N N  AAAAA  KKK    EEEE        C      L        I   EEEE   N N N    T
-     S  N  NN  A   A  K  K   E           C      L        I   E      N  NN    T
- SSSSS  N   N  A   A  K   K  EEEEE       CCCCC  LLLLL   III  EEEEE  N   N    T
-]])
-
--- Удаление старого GUI
-local player = game.Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-if playerGui:FindFirstChild("SNAKE_CLIENT") then
-    playerGui:FindFirstChild("SNAKE_CLIENT"):Destroy()
-end
-
--- GUI
-local ScreenGui = Instance.new("ScreenGui", playerGui)
-ScreenGui.Name = "SNAKE_CLIENT"
-ScreenGui.ResetOnSpawn = false
-
-local Frame = Instance.new("Frame", ScreenGui)
-Frame.Size = UDim2.new(0, 300, 0, 350)
-Frame.Position = UDim2.new(0.5, -150, 0.5, -175)
-Frame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-Frame.BorderSizePixel = 0
-Frame.Active = true
-Frame.Draggable = true -- Перетаскивание
-
-local UIStroke = Instance.new("UIStroke", Frame)
-UIStroke.Thickness = 2
-UIStroke.Color = Color3.fromRGB(0, 255, 255)
-
-local Title = Instance.new("TextLabel", Frame)
-Title.Size = UDim2.new(1, 0, 0, 40)
-Title.Text = "🐍 SNAKE CLIENT"
-Title.TextColor3 = Color3.fromRGB(0, 255, 255)
-Title.BackgroundTransparency = 1
-Title.TextScaled = true
-Title.Font = Enum.Font.SourceSansBold
-
--- FOV Circle
-local fovCircle = Drawing.new("Circle")
-fovCircle.Position = Vector2.new(workspace.CurrentCamera.ViewportSize.X/2, workspace.CurrentCamera.ViewportSize.Y/2)
-fovCircle.Radius = 100
-fovCircle.Thickness = 1
-fovCircle.Transparency = 1
-fovCircle.Color = Color3.fromRGB(0, 255, 255)
-fovCircle.Visible = false
-
-local silentAimEnabled = false
-local espEnabled = false
-
--- Silent Aim функция (с FOV)
-local function getClosestPlayer()
-    local closest = nil
-    local shortestDistance = fovCircle.Radius
-
-    for _, v in pairs(game.Players:GetPlayers()) do
-        if v ~= player and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
-            local screenPos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(v.Character.HumanoidRootPart.Position)
-            if onScreen then
-                local dist = (Vector2.new(screenPos.X, screenPos.Y) - fovCircle.Position).Magnitude
-                if dist < shortestDistance then
-                    closest = v
-                    shortestDistance = dist
-                end
-            end
-        end
-    end
-
-    return closest
-end
-
 -- ESP функция
-local espBoxes = {}
+local espData = {}
 
 local function clearESP()
-    for _, box in pairs(espBoxes) do
-        box:Remove()
+    for _, data in pairs(espData) do
+        data.box:Remove()
+        data.hp:Remove()
     end
-    espBoxes = {}
+    espData = {}
 end
 
 local function createESP()
     clearESP()
     for _, plr in pairs(game.Players:GetPlayers()) do
         if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            local box = Drawing.new("Text")
-            box.Text = plr.Name
-            box.Size = 14
-            box.Color = Color3.fromRGB(255, 255, 255)
-            box.Center = true
-            box.Outline = true
-            box.Visible = true
-            espBoxes[plr] = box
+            local box = Drawing.new("Square")
+            box.Thickness = 1.5
+            box.Color = Color3.fromRGB(0, 255, 0)
+            box.Filled = false
+            box.Visible = false
+
+            local hpText = Drawing.new("Text")
+            hpText.Size = 14
+            hpText.Color = Color3.fromRGB(255, 0, 0)
+            hpText.Center = true
+            hpText.Outline = true
+            hpText.Visible = false
+
+            espData[plr] = { box = box, hp = hpText }
         end
     end
 end
 
 game:GetService("RunService").RenderStepped:Connect(function()
     if espEnabled then
-        for plr, box in pairs(espBoxes) do
-            if plr.Character and plr.Character:FindFirstChild("Head") then
-                local pos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(plr.Character.Head.Position)
-                box.Position = Vector2.new(pos.X, pos.Y - 20)
-                box.Visible = onScreen
+        for plr, drawings in pairs(espData) do
+            local char = plr.Character
+            if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Head") and char:FindFirstChild("Humanoid") then
+                local hrp = char.HumanoidRootPart
+                local head = char.Head
+                local humanoid = char.Humanoid
+
+                local hrpPos, onScreen1 = workspace.CurrentCamera:WorldToViewportPoint(hrp.Position)
+                local headPos, onScreen2 = workspace.CurrentCamera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.3, 0))
+
+                if onScreen1 and onScreen2 then
+                    local height = math.abs(headPos.Y - hrpPos.Y)
+                    local width = height / 2
+                    local topLeft = Vector2.new(hrpPos.X - width / 2, hrpPos.Y - height)
+
+                    drawings.box.Size = Vector2.new(width, height)
+                    drawings.box.Position = topLeft
+                    drawings.box.Visible = true
+
+                    drawings.hp.Text = "HP: " .. math.floor(humanoid.Health)
+                    drawings.hp.Position = Vector2.new(hrpPos.X, topLeft.Y - 16)
+                    drawings.hp.Visible = true
+                else
+                    drawings.box.Visible = false
+                    drawings.hp.Visible = false
+                end
             else
-                box.Visible = false
+                drawings.box.Visible = false
+                drawings.hp.Visible = false
             end
         end
     else
         clearESP()
     end
-end)
-
--- Кнопки
-local function createButton(name, position, callback)
-    local button = Instance.new("TextButton", Frame)
-    button.Size = UDim2.new(0.8, 0, 0, 40)
-    button.Position = UDim2.new(0.1, 0, 0, position)
-    button.Text = name
-    button.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    button.TextColor3 = Color3.fromRGB(255, 255, 255)
-    button.Font = Enum.Font.GothamBold
-    button.TextScaled = true
-    button.MouseButton1Click:Connect(callback)
-end
-
-createButton("Toggle ESP", 60, function()
-    espEnabled = not espEnabled
-    if espEnabled then
-        createESP()
-        print("[SNAKE CLIENT] ESP ON")
-    else
-        clearESP()
-        print("[SNAKE CLIENT] ESP OFF")
-    end
-end)
-
-createButton("Toggle Silent Aim", 110, function()
-    silentAimEnabled = not silentAimEnabled
-    fovCircle.Visible = silentAimEnabled
-    print("[SNAKE CLIENT] Silent Aim:", silentAimEnabled and "ON" or "OFF")
-end)
-
-createButton("Increase FOV", 160, function()
-    fovCircle.Radius = fovCircle.Radius + 10
-    print("[SNAKE CLIENT] FOV:", fovCircle.Radius)
-end)
-
-createButton("Decrease FOV", 210, function()
-    fovCircle.Radius = math.max(10, fovCircle.Radius - 10)
-    print("[SNAKE CLIENT] FOV:", fovCircle.Radius)
-end)
-
-createButton("Trigger Bot (demo)", 260, function()
-    print("[SNAKE CLIENT] Trigger Bot activated! (demo only)")
-end)
-
--- Уведомление
-pcall(function()
-    game.StarterGui:SetCore("SendNotification", {
-        Title = "SNAKE CLIENT Loaded",
-        Text = "GUI готово, брат!",
-        Duration = 5
-    })
 end)
